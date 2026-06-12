@@ -26,23 +26,38 @@ jobs:
         with:
           version: 10
 
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
-
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('artifacts/vpn-app/package.json') }}
+          restore-keys: ${{ runner.os }}-pnpm-
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install VPN app dependencies only
+        working-directory: artifacts/vpn-app
+        run: |
+          # Standalone install without workspace resolution
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            // Remove workspace:* deps that don't exist standalone
+            const deps = pkg.devDependencies || {};
+            for (const [k, v] of Object.entries(deps)) {
+              if (String(v).startsWith('workspace:') || String(v) === 'catalog:') {
+                delete deps[k];
+              }
+            }
+            pkg.devDependencies = deps;
+            fs.writeFileSync('package.json.ci', JSON.stringify(pkg, null, 2));
+          "
+          mv package.json package.json.original
+          mv package.json.ci package.json
+          npm install --legacy-peer-deps
+          mv package.json.original package.json
 
       - name: Run typecheck
-        run: pnpm --filter @workspace/vpn-app run typecheck
+        working-directory: artifacts/vpn-app
+        run: npx tsc -p tsconfig.json --noEmit
 
   build:
     name: Build Android APK (EAS Cloud)
@@ -63,20 +78,32 @@ jobs:
         with:
           version: 10
 
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
-
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('artifacts/vpn-app/package.json') }}
+          restore-keys: ${{ runner.os }}-pnpm-
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Install VPN app dependencies
+        working-directory: artifacts/vpn-app
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            const deps = pkg.devDependencies || {};
+            for (const [k, v] of Object.entries(deps)) {
+              if (String(v).startsWith('workspace:') || String(v) === 'catalog:') {
+                delete deps[k];
+              }
+            }
+            pkg.devDependencies = deps;
+            fs.writeFileSync('package.json.ci', JSON.stringify(pkg, null, 2));
+          "
+          mv package.json package.json.original
+          mv package.json.ci package.json
+          npm install --legacy-peer-deps
+          mv package.json.original package.json
 
       - name: Setup Expo + EAS
         uses: expo/expo-github-action@v8
