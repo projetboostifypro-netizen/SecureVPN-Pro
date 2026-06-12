@@ -28,55 +28,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('artifacts/vpn-app/package.json') }}
-          restore-keys: ${{ runner.os }}-npm-
+          key: ${{ runner.os }}-npm-vpn-${{ hashFiles('artifacts/vpn-app/package.ci.json') }}
+          restore-keys: ${{ runner.os }}-npm-vpn-
 
-      - name: Prepare standalone package.json
+      - name: Install dependencies (CI package)
         working-directory: artifacts/vpn-app
         run: |
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const catalogMap = {
-              '@tanstack/react-query': '^5.90.21',
-              'react': '19.1.0',
-              'react-dom': '19.1.0',
-              'zod': '^3.25.76',
-            };
-            const deps = pkg.devDependencies || {};
-            for (const [k, v] of Object.entries(deps)) {
-              if (String(v).startsWith('workspace:')) {
-                delete deps[k];
-              } else if (String(v) === 'catalog:') {
-                if (catalogMap[k]) {
-                  deps[k] = catalogMap[k];
-                } else {
-                  delete deps[k];
-                }
-              }
-            }
-            pkg.devDependencies = deps;
-            fs.writeFileSync('package.ci.json', JSON.stringify(pkg, null, 2));
-            console.log('Resolved deps:', JSON.stringify(deps, null, 2));
-          "
-          cp package.json package.original.json
           cp package.ci.json package.json
+          npm install --legacy-peer-deps
 
-      - name: Install dependencies
-        working-directory: artifacts/vpn-app
-        run: npm install --legacy-peer-deps
-
-      - name: Run typecheck
+      - name: Run TypeScript check
         working-directory: artifacts/vpn-app
         run: npx tsc -p tsconfig.json --noEmit
-
-      - name: Restore package.json
-        if: always()
-        working-directory: artifacts/vpn-app
-        run: |
-          if [ -f package.original.json ]; then
-            cp package.original.json package.json
-          fi
 
   build:
     name: Build Android APK (EAS Cloud)
@@ -96,49 +59,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('artifacts/vpn-app/package.json') }}
-          restore-keys: ${{ runner.os }}-npm-
+          key: ${{ runner.os }}-npm-vpn-${{ hashFiles('artifacts/vpn-app/package.ci.json') }}
+          restore-keys: ${{ runner.os }}-npm-vpn-
 
-      - name: Prepare standalone package.json
+      - name: Install dependencies (CI package)
         working-directory: artifacts/vpn-app
         run: |
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const catalogMap = {
-              '@tanstack/react-query': '^5.90.21',
-              'react': '19.1.0',
-              'react-dom': '19.1.0',
-              'zod': '^3.25.76',
-            };
-            const deps = pkg.devDependencies || {};
-            for (const [k, v] of Object.entries(deps)) {
-              if (String(v).startsWith('workspace:')) {
-                delete deps[k];
-              } else if (String(v) === 'catalog:') {
-                if (catalogMap[k]) {
-                  deps[k] = catalogMap[k];
-                } else {
-                  delete deps[k];
-                }
-              }
-            }
-            pkg.devDependencies = deps;
-            fs.writeFileSync('package.ci.json', JSON.stringify(pkg, null, 2));
-          "
-          cp package.json package.original.json
           cp package.ci.json package.json
-
-      - name: Install dependencies
-        working-directory: artifacts/vpn-app
-        run: npm install --legacy-peer-deps
-
-      - name: Restore package.json
-        working-directory: artifacts/vpn-app
-        run: |
-          if [ -f package.original.json ]; then
-            cp package.original.json package.json
-          fi
+          npm install --legacy-peer-deps
 
       - name: Setup Expo + EAS
         uses: expo/expo-github-action@v8
