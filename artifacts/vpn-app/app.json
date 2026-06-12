@@ -40,6 +40,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1f050348-4af2-43b3-9530-e8c45a5e9f6e"
+      }
+    },
+    "owner": "boostifypro"
   }
 }
