@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   typecheck:
     name: TypeScript Check
@@ -21,43 +24,59 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Cache pnpm store
+      - name: Cache npm
         uses: actions/cache@v4
         with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('artifacts/vpn-app/package.json') }}
-          restore-keys: ${{ runner.os }}-pnpm-
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('artifacts/vpn-app/package.json') }}
+          restore-keys: ${{ runner.os }}-npm-
 
-      - name: Install VPN app dependencies only
+      - name: Prepare standalone package.json
         working-directory: artifacts/vpn-app
         run: |
-          # Standalone install without workspace resolution
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            // Remove workspace:* deps that don't exist standalone
+            const catalogMap = {
+              '@tanstack/react-query': '^5.90.21',
+              'react': '19.1.0',
+              'react-dom': '19.1.0',
+              'zod': '^3.25.76',
+            };
             const deps = pkg.devDependencies || {};
             for (const [k, v] of Object.entries(deps)) {
-              if (String(v).startsWith('workspace:') || String(v) === 'catalog:') {
+              if (String(v).startsWith('workspace:')) {
                 delete deps[k];
+              } else if (String(v) === 'catalog:') {
+                if (catalogMap[k]) {
+                  deps[k] = catalogMap[k];
+                } else {
+                  delete deps[k];
+                }
               }
             }
             pkg.devDependencies = deps;
-            fs.writeFileSync('package.json.ci', JSON.stringify(pkg, null, 2));
+            fs.writeFileSync('package.ci.json', JSON.stringify(pkg, null, 2));
+            console.log('Resolved deps:', JSON.stringify(deps, null, 2));
           "
-          mv package.json package.json.original
-          mv package.json.ci package.json
-          npm install --legacy-peer-deps
-          mv package.json.original package.json
+          cp package.json package.original.json
+          cp package.ci.json package.json
+
+      - name: Install dependencies
+        working-directory: artifacts/vpn-app
+        run: npm install --legacy-peer-deps
 
       - name: Run typecheck
         working-directory: artifacts/vpn-app
         run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Restore package.json
+        if: always()
+        working-directory: artifacts/vpn-app
+        run: |
+          if [ -f package.original.json ]; then
+            cp package.original.json package.json
+          fi
 
   build:
     name: Build Android APK (EAS Cloud)
@@ -73,37 +92,53 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Cache pnpm store
+      - name: Cache npm
         uses: actions/cache@v4
         with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('artifacts/vpn-app/package.json') }}
-          restore-keys: ${{ runner.os }}-pnpm-
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('artifacts/vpn-app/package.json') }}
+          restore-keys: ${{ runner.os }}-npm-
 
-      - name: Install VPN app dependencies
+      - name: Prepare standalone package.json
         working-directory: artifacts/vpn-app
         run: |
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            const catalogMap = {
+              '@tanstack/react-query': '^5.90.21',
+              'react': '19.1.0',
+              'react-dom': '19.1.0',
+              'zod': '^3.25.76',
+            };
             const deps = pkg.devDependencies || {};
             for (const [k, v] of Object.entries(deps)) {
-              if (String(v).startsWith('workspace:') || String(v) === 'catalog:') {
+              if (String(v).startsWith('workspace:')) {
                 delete deps[k];
+              } else if (String(v) === 'catalog:') {
+                if (catalogMap[k]) {
+                  deps[k] = catalogMap[k];
+                } else {
+                  delete deps[k];
+                }
               }
             }
             pkg.devDependencies = deps;
-            fs.writeFileSync('package.json.ci', JSON.stringify(pkg, null, 2));
+            fs.writeFileSync('package.ci.json', JSON.stringify(pkg, null, 2));
           "
-          mv package.json package.json.original
-          mv package.json.ci package.json
-          npm install --legacy-peer-deps
-          mv package.json.original package.json
+          cp package.json package.original.json
+          cp package.ci.json package.json
+
+      - name: Install dependencies
+        working-directory: artifacts/vpn-app
+        run: npm install --legacy-peer-deps
+
+      - name: Restore package.json
+        working-directory: artifacts/vpn-app
+        run: |
+          if [ -f package.original.json ]; then
+            cp package.original.json package.json
+          fi
 
       - name: Setup Expo + EAS
         uses: expo/expo-github-action@v8
