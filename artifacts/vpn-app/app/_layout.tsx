@@ -8,7 +8,8 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -35,13 +36,29 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  // On web, font loading can time out due to network — treat timeout as non-fatal
+  const [webReady, setWebReady] = useState(Platform.OS !== "web");
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+    if (Platform.OS === "web") {
+      // Give fonts 4 s then proceed regardless
+      const timer = setTimeout(() => setWebReady(true), 4000);
+      if (fontsLoaded || fontError) {
+        clearTimeout(timer);
+        setWebReady(true);
+      }
+      return () => clearTimeout(timer);
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  const ready = (fontsLoaded || !!fontError) || webReady;
+
+  useEffect(() => {
+    if (ready) {
+      SplashScreen.hideAsync();
+    }
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
     <SafeAreaProvider>
