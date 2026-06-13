@@ -11,7 +11,6 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { VpnProvider } from "@/context/VpnContext";
@@ -36,11 +35,9 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  // On web, font loading can time out due to network — treat timeout as non-fatal
   const [webReady, setWebReady] = useState(Platform.OS !== "web");
   useEffect(() => {
     if (Platform.OS === "web") {
-      // Give fonts 4 s then proceed regardless
       const timer = setTimeout(() => setWebReady(true), 4000);
       if (fontsLoaded || fontError) {
         clearTimeout(timer);
@@ -65,11 +62,9 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <VpnProvider>
-                <RootLayoutNav />
-              </VpnProvider>
-            </KeyboardProvider>
+            <VpnProvider>
+              <RootLayoutNav />
+            </VpnProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>
