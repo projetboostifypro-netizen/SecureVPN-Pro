@@ -79,7 +79,7 @@ jobs:
       - name: Generate native Android project (expo prebuild)
         working-directory: artifacts/vpn-app
         run: |
-          npx expo prebuild --platform android --non-interactive --clean
+          npx expo prebuild --platform android --non-interactive --no-install --clean
         env:
           EXPO_NO_TELEMETRY: 1
 
