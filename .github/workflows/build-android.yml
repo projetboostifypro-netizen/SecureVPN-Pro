@@ -71,33 +71,36 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
       - name: Generate native Android project (expo prebuild)
         working-directory: artifacts/vpn-app
-        run: |
-          npx expo prebuild --platform android --non-interactive --no-install --clean
+        run: npx expo prebuild --platform android --non-interactive --no-install --clean
         env:
           EXPO_NO_TELEMETRY: 1
+
+      - name: Make gradlew executable
+        working-directory: artifacts/vpn-app/android
+        run: chmod +x ./gradlew
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('artifacts/vpn-app/android/**/*.gradle*', 'artifacts/vpn-app/android/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build debug APK
         working-directory: artifacts/vpn-app/android
         shell: bash
         run: |
           set -o pipefail
-          COMMAND="gradle assembleDebug --no-daemon --stacktrace --warning-mode all"
-          echo "Commande : $COMMAND"
           echo "Dossier : $(pwd)"
           echo "Version Java :"
           java -version
-          echo "Version Gradle :"
-          gradle --version
           echo "Fichiers Android présents :"
           ls -la
-          $COMMAND 2>&1 | tee ../../gradle-build-full.log
+          ./gradlew assembleDebug --no-daemon --stacktrace --warning-mode all 2>&1 | tee ../../gradle-build-full.log
 
       - name: Upload Gradle diagnostics on failure
         if: failure()
