@@ -7,9 +7,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   typecheck:
     name: TypeScript Check
@@ -42,7 +39,7 @@ jobs:
         run: npx tsc -p tsconfig.json --noEmit
 
   build:
-    name: Build Android APK (EAS Cloud)
+    name: Build Android APK (Native Gradle)
     runs-on: ubuntu-latest
     needs: typecheck
 
@@ -68,15 +65,58 @@ jobs:
           cp package.ci.json package.json
           npm install --legacy-peer-deps
 
-      - name: Setup Expo + EAS
-        uses: expo/expo-github-action@v8
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Build Android APK via EAS Cloud
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Generate native Android project (expo prebuild)
         working-directory: artifacts/vpn-app
-        run: eas build --platform android --profile preview --non-interactive
+        run: |
+          npx expo prebuild --platform android --non-interactive --clean
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_NO_TELEMETRY: 1
+
+      - name: Build debug APK
+        working-directory: artifacts/vpn-app/android
+        shell: bash
+        run: |
+          set -o pipefail
+          COMMAND="gradle assembleDebug --no-daemon --stacktrace --warning-mode all"
+          echo "Commande : $COMMAND"
+          echo "Dossier : $(pwd)"
+          echo "Version Java :"
+          java -version
+          echo "Version Gradle :"
+          gradle --version
+          echo "Fichiers Android présents :"
+          ls -la
+          $COMMAND 2>&1 | tee ../../gradle-build-full.log
+
+      - name: Upload Gradle diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-diagnostics
+          if-no-files-found: warn
+          path: |
+            gradle-build-full.log
+            artifacts/vpn-app/android/app/build/reports/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecureVPN-Pro-debug-apk
+          path: artifacts/vpn-app/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish APK as Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/vpn-app/android/app/build/outputs/apk/debug/app-debug.apk
